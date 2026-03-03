@@ -867,11 +867,20 @@ body {
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    color: #4caf50;
+    color: var(--text-secondary);
     display: none;
     align-items: center;
     justify-content: center;
     z-index: 5;
+    font-size: 10px;
+}
+
+.execution-status.success {
+    color: #4caf50;
+}
+
+.execution-status.failure {
+    color: #f44336;
 }
 
 .cell.executed .execution-status {

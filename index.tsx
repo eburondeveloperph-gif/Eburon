@@ -1341,13 +1341,7 @@ async function runCell(cellId: string) {
     'persistentScope',
     'cellScope',
     'previewContent',
-    `
-    try {
-      ${code}
-    } catch (e) {
-      console.error(e);
-    }
-  `,
+    code,
   );
 
   try {
@@ -1358,11 +1352,11 @@ async function runCell(cellId: string) {
       cellScope,
       previewContent,
     );
-    markCellAsExecuted(cellId, code);
+    markCellAsExecuted(cellId, code, true);
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     sandboxConsole.error('Uncaught:', errorMessage);
-    markCellAsExecuted(cellId, code);
+    markCellAsExecuted(cellId, code, false);
   }
 }
 
@@ -1536,13 +1530,21 @@ async function restartAndRunAll() {
   await runAllCells();
 }
 
-function markCellAsExecuted(cellId: string, content: string) {
+function markCellAsExecuted(cellId: string, content: string, success = true) {
   const cell = cells.find((c) => c.id === cellId);
   const cellElement = document.getElementById(`cell-container-${cellId}`);
   if (cell && cellElement) {
     cell.isExecuted = true;
     cell.lastExecutedContent = content;
     cellElement.classList.add('executed');
+    
+    const statusEl = cellElement.querySelector('.execution-status');
+    const icon = statusEl?.querySelector('i');
+    if (statusEl && icon) {
+      statusEl.classList.remove('success', 'failure');
+      statusEl.classList.add(success ? 'success' : 'failure');
+      icon.className = success ? 'fa fa-check' : 'fa fa-times';
+    }
   }
 }
 
@@ -1553,6 +1555,11 @@ function markCellAsUnexecuted(cellId: string) {
     cell.isExecuted = false;
     cell.lastExecutedContent = undefined;
     cellElement.classList.remove('executed');
+    
+    const statusEl = cellElement.querySelector('.execution-status');
+    if (statusEl) {
+      statusEl.classList.remove('success', 'failure');
+    }
   }
 }
 
