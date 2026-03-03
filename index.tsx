@@ -249,6 +249,14 @@ newNotebookBtn.addEventListener('click', () => {
     }
 });
 
+// Suppress ResizeObserver loop limit exceeded error
+window.addEventListener('error', (e) => {
+  if (e.message === 'ResizeObserver loop completed with undelivered notifications.' ||
+      e.message === 'ResizeObserver loop limit exceeded') {
+    e.stopImmediatePropagation();
+  }
+});
+
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 function addAgentMessage(text: string, type: 'system' | 'user' | 'thinking') {
@@ -932,9 +940,11 @@ async function addCell(
       .get(monaco.editor.EditorOption.lineHeight) as number;
     const newHeight = Math.max(lineHeight * 5, contentHeight);
     editorContainer.style.height = `${newHeight}px`;
-    editorInstance.layout({
-      width: editorContainer.clientWidth,
-      height: newHeight,
+    requestAnimationFrame(() => {
+      editorInstance.layout({
+        width: editorContainer.clientWidth,
+        height: newHeight,
+      });
     });
   });
 
@@ -1085,8 +1095,10 @@ async function runCell(cellId: string) {
       cell.mode = 'edit';
       cell.isOutputVisible = false;
       updateOutputToggle(cellId, false, true);
-      editor.layout();
-      editor.focus();
+      requestAnimationFrame(() => {
+        editor.layout();
+        editor.focus();
+      });
     }
     return;
   }
