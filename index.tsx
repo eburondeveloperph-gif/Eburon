@@ -10,6 +10,15 @@ import {setAnchorHref, setElementInnerHtml, windowOpen} from 'safevalues/dom';
 import Sortable, {SortableEvent} from 'sortablejs';
 import { GoogleGenAI, Type } from "@google/genai";
 import * as monacoEditor from 'monaco-editor';
+import { 
+  ALIAS_REGISTRY, 
+  DEFAULT_RULES, 
+  EburonErrorCode, 
+  ERROR_MAPPING, 
+  evaluatePolicy, 
+  logEburonEvent,
+  Capability
+} from './eburon_standard';
 
 declare global {
   interface Window {
@@ -396,16 +405,37 @@ async function handleAgentRequest() {
   agentInput.value = '';
   addAgentMessage(goal, 'user');
   
+  const aliasId = 'llm/codemax_pro-3.1';
+  const policy = evaluatePolicy(aliasId, 'chat');
+
+  if (!policy.allowed) {
+    const errorCode = policy.error || EburonErrorCode.WL_DENY;
+    const errorInfo = ERROR_MAPPING[errorCode];
+    
+    logEburonEvent({
+      level: 'error',
+      code: errorCode,
+      message: 'Request blocked by policy',
+      model: { alias_id: aliasId },
+      decision: { effect: 'deny' }
+    });
+
+    addAgentMessage(`ERROR: ${errorInfo.ui}`, 'system');
+    return;
+  }
+
   startGeneration();
-  const thinkingMsg = addAgentMessage('Eburon is synthesizing architecture...', 'thinking');
+  const thinkingMsg = addAgentMessage('Eburon standard is synthesizing architecture...', 'thinking');
 
   try {
+    const modelInfo = ALIAS_REGISTRY.find(m => m.id === aliasId)!;
+    
     const model = ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
+      model: modelInfo.upstream.model,
       contents: [
         {
           role: "user",
-          parts: [{ text: `You are Eburon Codemax, a world-class autonomous AI coding agent. 
+          parts: [{ text: `You are Eburon standard, a world-class autonomous AI coding agent. 
           Your goal is to help the user build sophisticated web applications in this interactive notebook environment.
           
           CAPABILITIES:
@@ -517,7 +547,18 @@ async function handleAgentRequest() {
   } catch (error) {
     finishGeneration();
     thinkingMsg.remove();
-    addAgentMessage(`Error: ${error instanceof Error ? error.message : String(error)}`, 'system');
+    
+    const errorCode = error instanceof Error && error.message.includes('API_KEY') ? EburonErrorCode.KEY_MISSING : EburonErrorCode.UPSTREAM_ERROR;
+    const errorInfo = ERROR_MAPPING[errorCode];
+
+    logEburonEvent({
+      level: 'error',
+      code: errorCode,
+      message: error instanceof Error ? error.message : String(error),
+      model: { alias_id: aliasId }
+    });
+
+    addAgentMessage(`ERROR: ${errorInfo.ui}`, 'system');
   }
 }
 
@@ -578,7 +619,7 @@ To sync with Git:
 2. Move it to your local git repository.
 3. Run: 
    git add notebook.js
-   git commit -m "Sync from Eburon Codemax"
+   git commit -m "Sync from Eburon standard"
    git push
 
 Would you like to download the notebook now?`;
@@ -617,7 +658,7 @@ const micBtn = document.getElementById('mic-btn');
 const mobileToggle = document.getElementById('mobile-toggle');
 const sidebar = document.getElementById('sidebar');
 
-logoBtn?.addEventListener('click', () => triggerToast('Eburon Codepilot v3.0 Info'));
+logoBtn?.addEventListener('click', () => triggerToast('Eburon standard v3.0 Info'));
 serverBtn?.addEventListener('click', () => triggerToast('Server is connected and healthy (32ms ping)', 'fa-wifi'));
 attachBtn?.addEventListener('click', () => triggerToast('Opening file browser dialog...', 'fa-paperclip'));
 micBtn?.addEventListener('click', () => triggerToast('Microphone active. Listening...', 'fa-microphone'));

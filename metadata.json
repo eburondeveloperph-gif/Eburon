@@ -1,6 +1,6 @@
 {
-  "name": "Eburon Codemax",
-  "description": "Autonomous AI Coding Agent powered by Gemini. Build, test, and deploy code interactively.",
+  "name": "Eburon standard",
+  "description": "Autonomous AI Coding Agent powered by Eburon standard. Build, test, and deploy code interactively.",
   "requestFramePermissions": [],
   "prompt": ""
 }
