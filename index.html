@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Eburon Codemax - Autonomous AI Coding Agent</title>
+    <!-- Fonts and Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <link rel="stylesheet" href="index.css" />
     <script type="importmap">
       {
@@ -32,130 +37,123 @@
 
     <div id="app-container">
       <!-- SIDEBAR -->
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <div class="app-brand">
-                <div class="app-logo">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12z"></path>
-                        <path d="M8 12h8"></path>
-                        <path d="M12 8v8"></path>
-                    </svg>
+            <div class="logo-area" id="logo-btn">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-microchip"></i>
                 </div>
-                <div class="app-info">
-                    <span class="app-name">Eburon Codepilot</span>
-                    <span class="app-version">eburonmax/codemax-v3</span>
+                <div class="logo-text">
+                    <h1>Eburon Codepilot</h1>
+                    <p>eburonmax/codemax-v3</p>
                 </div>
             </div>
-            <button class="btn-icon" id="new-notebook-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-            </button>
+            <button class="add-btn" id="new-notebook-btn" title="New Chat"><i class="fa-solid fa-plus"></i></button>
         </div>
 
-        <div class="server-status">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
-            Gemini 3.1 Pro — Online
-            <svg style="margin-left:auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        <div class="server-status" id="server-btn">
+            <i class="fa-solid fa-wifi"></i> EU-server · Gemini 3.1 Pro — Online <i class="fa-solid fa-chevron-down" style="margin-left:auto"></i>
         </div>
 
         <div class="chat-container" id="agent-chat-history">
-            <div class="chat-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                Session History
-            </div>
-            <div class="agent-message system">
-                Hello! I am Eburon Codemax. What should we build today?
-            </div>
+            <!-- Dynamic Chat Content -->
         </div>
 
-        <div class="input-area">
-            <div class="input-wrapper">
-                <button class="btn-icon" style="border:none; background:transparent">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                </button>
-                <input type="text" id="agent-input" placeholder="Describe what to build...">
-                <button class="btn-send" id="agent-send-btn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                </button>
+        <div class="input-wrapper">
+            <div class="input-box">
+                <button class="icon-btn" id="attach-btn" title="Attach File"><i class="fa-solid fa-paperclip"></i></button>
+                <button class="icon-btn" id="mic-btn" title="Voice Prompt"><i class="fa-solid fa-microphone"></i></button>
+                <input type="text" id="agent-input" placeholder="Describe what to build..." autocomplete="off">
+                <button class="send-btn" id="agent-send-btn" title="Send Prompt"><i class="fa-solid fa-paper-plane"></i></button>
             </div>
-            <div class="copyright">&copy; 2026 Eburon Technologies</div>
+            <div class="footer-credits">© 2026 Eburon Technologies</div>
         </div>
       </aside>
 
       <!-- MAIN VIEW -->
       <main class="main-view">
-          <div class="top-bar">
-              <div class="view-toggle">
-                  <button class="toggle-btn active" id="view-code-btn">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-                      Notebook
-                  </button>
-                  <button class="toggle-btn" id="view-preview-btn">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                      Preview
-                  </button>
-                  <button class="toggle-btn" id="view-history-btn">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"></path><circle cx="12" cy="12" r="10"></circle></svg>
-                      History
-                  </button>
+          <header class="top-nav">
+              <button class="mobile-toggle" id="mobile-toggle"><i class="fa-solid fa-bars"></i></button>
+              
+              <div class="view-toggles">
+                  <button class="toggle-btn active" id="view-code-btn"><i class="fa-solid fa-code"></i> Notebook</button>
+                  <button class="toggle-btn" id="view-preview-btn"><i class="fa-regular fa-eye"></i> Preview</button>
+                  <button class="toggle-btn" id="view-history-btn"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
               </div>
+              
               <div class="action-buttons">
-                <button class="btn-download" id="commit-btn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                    Commit
-                </button>
-                <button class="btn-download" id="git-sync-btn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
-                    Git Sync
-                </button>
-                <button class="btn-download" id="run-all-btn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    Run All
-                </button>
-                <button class="btn-download" id="download-btn">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Download
-                </button>
+                <button class="btn-outline" id="commit-btn"><i class="fa-solid fa-check"></i> Commit</button>
+                <button class="btn-outline" id="git-sync-btn"><i class="fa-brands fa-github"></i> Git Sync</button>
+                <button class="btn-outline" id="run-all-btn"><i class="fa-solid fa-play"></i> Run All</button>
+                <button class="btn-outline" id="download-btn"><i class="fa-solid fa-download"></i> Download</button>
               </div>
-          </div>
+          </header>
 
-          <!-- Three.js Background -->
-          <div id="three-canvas-container"></div>
-
-          <!-- Notebook Container -->
-          <div id="notebook" class="active"></div>
-          
-          <!-- Preview Container (Hidden by default) -->
-          <div id="preview-container" style="display: none;">
-            <div class="preview-header">
-              <span>Live Preview</span>
-              <button id="refresh-preview-btn" class="btn-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-              </button>
-            </div>
-            <div id="preview-content"></div>
-          </div>
-
-          <!-- History Container -->
-          <div id="history-container" style="display: none;">
-            <div class="history-header">
-              <span>Version History</span>
-              <div class="history-actions">
-                <button id="history-commit-btn" class="btn-icon" title="Commit Current State">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                </button>
-                <button id="clear-history-btn" class="btn-icon" title="Clear History">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
+          <div class="content-area">
+              <!-- Empty State -->
+              <div class="workspace-view empty-state active" id="workspace-empty">
+                  <div class="empty-icon">
+                      <i class="fa-brands fa-connectdevelop"></i>
+                  </div>
+                  <h2>Eburon Codemax</h2>
+                  <p>Describe what you want to build and the AI will generate<br>production-ready code</p>
+                  
+                  <div class="pill-container">
+                      <button class="pill">Landing Page</button>
+                      <button class="pill">PWA Mobile App</button>
+                      <button class="pill">Movie Portal</button>
+                      <button class="pill">Dashboard</button>
+                  </div>
               </div>
-            </div>
-            <div id="history-list">
-              <!-- History items will be injected here -->
-              <div class="empty-history">No versions saved yet. Click "Commit" to save the current state.</div>
-            </div>
+
+              <!-- Notebook Container -->
+              <div id="notebook" class="workspace-view"></div>
+              
+              <!-- Preview Container -->
+              <div id="preview-container" class="workspace-view">
+                <div class="browser-mockup">
+                    <div class="browser-header">
+                        <div class="browser-dots"><span></span><span></span><span></span></div>
+                        <div class="browser-url">localhost:3000</div>
+                        <i class="fa-solid fa-rotate-right" id="refresh-preview-btn" style="color:#94a3b8; cursor:pointer;"></i>
+                    </div>
+                    <div class="browser-content" id="preview-content">
+                        <!-- Live Preview Content -->
+                    </div>
+                </div>
+              </div>
+
+              <!-- History Container -->
+              <div id="history-container" class="workspace-view">
+                <div class="history-header">
+                  <span>Version History</span>
+                  <div class="history-actions">
+                    <button id="history-commit-btn" class="btn-icon" title="Commit Current State">
+                      <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <button id="clear-history-btn" class="btn-icon" title="Clear History">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+                <div id="history-list">
+                  <!-- History items will be injected here -->
+                  <div class="empty-history">No versions saved yet. Click "Commit" to save the current state.</div>
+                </div>
+              </div>
+
+              <!-- Loading Overlay -->
+              <div class="loading-overlay" id="loading-overlay">
+                  <div id="three-canvas-container"></div>
+                  <div id="code-stream"></div>
+                  <div class="loading-text">
+                      <div class="pulse" id="loading-msg">Initializing Eburon Codemax Engine...</div>
+                  </div>
+              </div>
           </div>
       </main>
     </div>
+    <div class="toast-container" id="toast-container"></div>
     <script type="module" src="/index.tsx"></script>
 
   </body>

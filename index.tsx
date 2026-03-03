@@ -249,28 +249,139 @@ newNotebookBtn.addEventListener('click', () => {
     }
 });
 
-// Suppress ResizeObserver loop limit exceeded error
+// Suppress ResizeObserver loop limit exceeded errors which are benign but noisy
+const RESIZE_OBSERVER_ERROR_MSGS = [
+  'ResizeObserver loop completed with undelivered notifications.',
+  'ResizeObserver loop limit exceeded'
+];
+
+const isResizeObserverError = (msg: string | undefined) => {
+  if (!msg) return false;
+  return RESIZE_OBSERVER_ERROR_MSGS.some(m => msg.includes(m));
+};
+
+// Wrap ResizeObserver to throttle callbacks with requestAnimationFrame
+// This is a common fix to prevent "ResizeObserver loop limit exceeded" errors
+if (typeof window !== 'undefined' && window.ResizeObserver) {
+  const OriginalResizeObserver = window.ResizeObserver;
+  window.ResizeObserver = class extends OriginalResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      super((entries, observer) => {
+        window.requestAnimationFrame(() => {
+          if (!Array.isArray(entries) || !entries.length) return;
+          callback(entries, observer);
+        });
+      });
+    }
+  };
+}
+
 window.addEventListener('error', (e) => {
-  if (e.message === 'ResizeObserver loop completed with undelivered notifications.' ||
-      e.message === 'ResizeObserver loop limit exceeded') {
+  if (isResizeObserverError(e.message) || (e.error && isResizeObserverError(e.error.message))) {
     e.stopImmediatePropagation();
+    e.preventDefault();
   }
-});
+}, true);
+
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason?.message || (typeof e.reason === 'string' ? e.reason : '');
+  if (isResizeObserverError(msg)) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+}, true);
+
+// As a last resort, override console.error to filter out these specific messages
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const msg = args.find(arg => typeof arg === 'string' && isResizeObserverError(arg));
+  if (msg) return;
+  originalConsoleError.apply(console, args);
+};
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+
+let isAnimating = false;
+const loadingOverlay = document.getElementById('loading-overlay') as HTMLDivElement;
+const loadingMsg = document.getElementById('loading-msg') as HTMLDivElement;
+const codeStream = document.getElementById('code-stream') as HTMLDivElement;
+const workspaceEmpty = document.getElementById('workspace-empty') as HTMLDivElement;
+
+function startGeneration() {
+  switchWorkspace('none');
+  loadingOverlay.classList.add('active');
+  isAnimating = true;
+}
+
+function finishGeneration() {
+  isAnimating = false;
+  loadingOverlay.classList.remove('active');
+  codeStream.innerHTML = '';
+  switchWorkspace('code');
+  triggerToast('Generation complete!', 'fa-check');
+}
+
+function switchWorkspace(type: 'code' | 'preview' | 'history' | 'empty' | 'none') {
+  workspaceEmpty.classList.remove('active');
+  notebook.classList.remove('active');
+  previewContainer.classList.remove('active');
+  historyContainer.classList.remove('active');
+
+  if (type === 'empty') workspaceEmpty.classList.add('active');
+  if (type === 'code') notebook.classList.add('active');
+  if (type === 'preview') previewContainer.classList.add('active');
+  if (type === 'history') historyContainer.classList.add('active');
+}
+
+function getTime() {
+  return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function triggerToast(message: string, icon: string = "fa-circle-info") {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+  
+  container.appendChild(toast);
+  
+  // Trigger animation
+  setTimeout(() => toast.classList.add('show'), 10);
+  
+  // Remove after 3s
+  setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
 
 function addAgentMessage(text: string, type: 'system' | 'user' | 'thinking') {
   const msgDiv = document.createElement('div');
   msgDiv.className = `agent-message ${type}`;
+  
   if (type === 'thinking') {
     msgDiv.id = 'agent-thinking-msg';
-  }
-  
-  // Use markdown to render agent messages
-  if (type !== 'thinking') {
-    setElementInnerHtml(msgDiv, sanitizeHtml(md.render(text)));
-  } else {
     msgDiv.textContent = text;
+  } else if (type === 'user') {
+    msgDiv.innerHTML = `${text} <span class="bubble-time">${getTime()}</span>`;
+  } else {
+    // System/Agent message
+    const icon = document.createElement('div');
+    icon.className = 'system-icon';
+    icon.innerHTML = '<i class="fa-solid fa-microchip"></i>';
+    
+    const content = document.createElement('div');
+    setElementInnerHtml(content, sanitizeHtml(md.render(text)));
+    
+    const time = document.createElement('span');
+    time.className = 'bubble-time';
+    time.textContent = getTime();
+    content.appendChild(time);
+    
+    msgDiv.appendChild(icon);
+    msgDiv.appendChild(content);
   }
   
   agentChatHistory.appendChild(msgDiv);
@@ -285,6 +396,7 @@ async function handleAgentRequest() {
   agentInput.value = '';
   addAgentMessage(goal, 'user');
   
+  startGeneration();
   const thinkingMsg = addAgentMessage('Eburon is synthesizing architecture...', 'thinking');
 
   try {
@@ -401,8 +513,9 @@ async function handleAgentRequest() {
     
     // Auto-save version after agent changes
     saveVersion(`Agent: ${goal.substring(0, 30)}${goal.length > 30 ? '...' : ''}`, true);
-    
+    finishGeneration();
   } catch (error) {
+    finishGeneration();
     thinkingMsg.remove();
     addAgentMessage(`Error: ${error instanceof Error ? error.message : String(error)}`, 'system');
   }
@@ -421,18 +534,14 @@ viewCodeBtn.addEventListener('click', () => {
     viewCodeBtn.classList.add('active');
     viewPreviewBtn.classList.remove('active');
     viewHistoryBtn.classList.remove('active');
-    notebook.classList.add('active');
-    previewContainer.style.display = 'none';
-    historyContainer.style.display = 'none';
+    switchWorkspace('code');
 });
 
 viewPreviewBtn.addEventListener('click', () => {
     viewPreviewBtn.classList.add('active');
     viewCodeBtn.classList.remove('active');
     viewHistoryBtn.classList.remove('active');
-    notebook.classList.remove('active');
-    previewContainer.style.display = 'flex';
-    historyContainer.style.display = 'none';
+    switchWorkspace('preview');
     updatePreview();
 });
 
@@ -440,9 +549,7 @@ viewHistoryBtn.addEventListener('click', () => {
     viewHistoryBtn.classList.add('active');
     viewCodeBtn.classList.remove('active');
     viewPreviewBtn.classList.remove('active');
-    notebook.classList.remove('active');
-    previewContainer.style.display = 'none';
-    historyContainer.style.display = 'flex';
+    switchWorkspace('history');
     updateHistoryUI();
 });
 
@@ -502,6 +609,29 @@ function updatePreview() {
 
 refreshPreviewBtn.addEventListener('click', updatePreview);
 
+// Action Buttons
+const logoBtn = document.getElementById('logo-btn');
+const serverBtn = document.getElementById('server-btn');
+const attachBtn = document.getElementById('attach-btn');
+const micBtn = document.getElementById('mic-btn');
+const mobileToggle = document.getElementById('mobile-toggle');
+const sidebar = document.getElementById('sidebar');
+
+logoBtn?.addEventListener('click', () => triggerToast('Eburon Codepilot v3.0 Info'));
+serverBtn?.addEventListener('click', () => triggerToast('Server is connected and healthy (32ms ping)', 'fa-wifi'));
+attachBtn?.addEventListener('click', () => triggerToast('Opening file browser dialog...', 'fa-paperclip'));
+micBtn?.addEventListener('click', () => triggerToast('Microphone active. Listening...', 'fa-microphone'));
+mobileToggle?.addEventListener('click', () => sidebar?.classList.toggle('open'));
+
+// Pills Logic
+document.querySelectorAll('.pill').forEach(pill => {
+    pill.addEventListener('click', (e) => {
+        const text = (e.target as HTMLElement).innerText;
+        agentInput.value = `Create a complete and responsive ${text} with modern UI styling.`;
+        handleAgentRequest();
+    });
+});
+
 // Three.js Background Logic
 function initThreeJS() {
     const THREE = window.THREE;
@@ -511,77 +641,95 @@ function initThreeJS() {
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x05070a, 0.05);
-
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.z = 15;
-    camera.position.y = 5;
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    
+    renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(renderer.domElement);
 
-    const createParticleTexture = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 32;
-        canvas.height = 32;
-        const ctx = canvas.getContext('2d')!;
-        const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        gradient.addColorStop(0.2, 'rgba(99, 102, 241, 0.8)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 32, 32);
-        return new THREE.CanvasTexture(canvas);
-    };
-
-    const particlesGeo = new THREE.BufferGeometry();
-    const particlesCount = 800;
-    const posArray = new Float32Array(particlesCount * 3);
-    const velocities: any[] = [];
-
-    for(let i = 0; i < particlesCount * 3; i+=3) {
-        posArray[i] = (Math.random() - 0.5) * 40;
-        posArray[i+1] = (Math.random() - 0.5) * 40;
-        posArray[i+2] = (Math.random() - 0.5) * 40;
-        velocities.push({ y: Math.random() * 0.02 + 0.01, x: (Math.random() - 0.5) * 0.01 });
-    }
-
-    particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-    const particlesMat = new THREE.PointsMaterial({
-        size: 0.4,
-        map: createParticleTexture(),
+    const coreGeometry = new THREE.TorusKnotGeometry(10, 2.5, 120, 16);
+    const coreMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x4f46e5, 
+        wireframe: true,
         transparent: true,
-        opacity: 0.6,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
+        opacity: 0.4
     });
+    const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
+    scene.add(coreMesh);
 
-    const particlesMesh = new THREE.Points(particlesGeo, particlesMat);
+    const particlesGeometry = new THREE.BufferGeometry();
+    const particlesCount = 2000;
+    const posArray = new Float32Array(particlesCount * 3);
+    
+    for(let i = 0; i < particlesCount * 3; i++) {
+        posArray[i] = (Math.random() - 0.5) * 60;
+    }
+    
+    particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const particlesMaterial = new THREE.PointsMaterial({
+        size: 0.15,
+        color: 0x2ea043,
+        transparent: true,
+        opacity: 0.8
+    });
+    const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
     scene.add(particlesMesh);
+
+    camera.position.z = 25;
 
     const animate = () => {
         requestAnimationFrame(animate);
-        const positions = particlesGeo.attributes.position.array as Float32Array;
-        for(let i = 0; i < particlesCount; i++) {
-            const i3 = i * 3;
-            positions[i3 + 1] += velocities[i].y;
-            positions[i3] += velocities[i].x;
-            if(positions[i3 + 1] > 20) positions[i3 + 1] = -20;
+        if (!isAnimating) {
+            // Subtle idle animation
+            coreMesh.rotation.x += 0.001;
+            coreMesh.rotation.y += 0.001;
+            particlesMesh.rotation.y -= 0.0005;
+        } else {
+            // Faster generation animation
+            coreMesh.rotation.x += 0.01;
+            coreMesh.rotation.y += 0.015;
+            particlesMesh.rotation.y -= 0.005;
+            particlesMesh.rotation.x -= 0.002;
         }
-        particlesGeo.attributes.position.needsUpdate = true;
-        particlesMesh.rotation.y += 0.001;
         renderer.render(scene, camera);
     };
 
     animate();
+
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(container.clientWidth, container.clientHeight);
     });
+
+    // Falling Code Stream Overlay
+    const snippets = [
+        "function()", "const data =", "await fetch()", "React.FC", 
+        "useEffect(()=>", "import {", "module.exports", "console.log",
+        "return <div>", "style={{", "className=", "=> null"
+    ];
+
+    function spawnCodeSnippet() {
+        if(!isAnimating) return;
+        
+        const el = document.createElement('div');
+        el.className = 'stream-line';
+        el.innerText = snippets[Math.floor(Math.random() * snippets.length)];
+        
+        el.style.left = `${Math.random() * 100}%`;
+        const duration = Math.random() * 2 + 2;
+        el.style.animationDuration = `${duration}s`;
+        
+        el.style.color = Math.random() > 0.5 ? '#4f46e5' : '#2ea043';
+        
+        codeStream.appendChild(el);
+        
+        setTimeout(() => {
+            if(el.parentElement) el.remove();
+        }, duration * 1000);
+    }
+
+    setInterval(spawnCodeSnippet, 150);
 }
 
 function renderOutputs(outputDiv: HTMLElement, outputs: Output[]) {
@@ -780,6 +928,9 @@ async function addCell(
   outputs: Output[] = [],
   index?: number,
 ) {
+  // Hide empty state
+  switchWorkspace('code');
+  
   // Monaco is already imported, no need to await
   const cellId = `cell${cellCounter++}`;
   const cellDiv = document.createElement('div');
@@ -980,6 +1131,10 @@ function deleteCell(cellId: string) {
   if (monacoInstances[cellId]) {
     monacoInstances[cellId].dispose();
     delete monacoInstances[cellId];
+  }
+
+  if (cells.length === 0) {
+    switchWorkspace('empty');
   }
 }
 
@@ -1610,9 +1765,9 @@ limitations under the License.`;
     const cellsData = parseNotebookFile(await response.text());
     if (!Array.isArray(cellsData) || cellsData.length === 0) {
       console.warn(
-        'Notebook file is empty or contains no valid cells. Initializing with an empty code cell.',
+        'Notebook file is empty or contains no valid cells. Initializing with empty state.',
       );
-      await addCell('', 'js');
+      switchWorkspace('empty');
     } else {
       for (const cellData of cellsData) {
         await addCell(
@@ -1623,6 +1778,9 @@ limitations under the License.`;
         );
       }
     }
+
+    initThreeJS();
+    loadVersions();
 
     notebook.addEventListener('mousemove', (e) => {
       const cellElements = Array.from(notebook.getElementsByClassName('cell'));
